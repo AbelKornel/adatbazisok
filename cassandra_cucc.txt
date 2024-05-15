@@ -1,0 +1,174 @@
+Connected as kornelpeter.abel@gmail.com.
+Connected to cndb at cassandra.ingress:9042.
+[cqlsh 6.8.0 | Cassandra 4.0.0.6816 | CQL spec 3.4.5 | Native protocol v4 | TLS]
+Use HELP for help.
+token@cqlsh> use "Movies"
+   ... ;
+token@cqlsh:Movies> SELECT type, release_year, COUNT(*)
+          ... FROM movies_and_tv
+          ... GROUP BY type, release_year, LIMIT 5;
+SyntaxException: line 3:29 no viable alternative at input 'LIMIT' (...GROUP BY type, release_year, [LIMIT]...)
+token@cqlsh:Movies> SELECT type, release_year, COUNT(*) FROM movies_and_tv GROUP BY type, release_year LIMIT 5;
+InvalidRequest: Error from server: code=2200 [Invalid query] message="Group by currently only support groups of columns following their declared order in the PRIMARY KEY"
+token@cqlsh:Movies> SELECT type, release_year, COUNT(*) FROM movies_and_tv GROUP BY release_year, type LIMIT 5;
+
+ type    | release_year | count
+---------+--------------+-------
+ TV Show |         2019 |    20
+ TV Show |         2018 |    19
+   Movie |         2006 |    58
+   Movie |         2013 |   153
+ TV Show |         2013 |     2
+
+(5 rows)
+
+Warnings :
+Aggregation query used without partition key
+
+token@cqlsh:Movies> describe tables
+
+"Movies"  movies_and_tv  szemely
+
+token@cqlsh:Movies> describe szemely
+
+CREATE TABLE "Movies".szemely (
+    nev text,
+    szulev int,
+    foglalkozas text,
+    PRIMARY KEY ((nev, szulev), foglalkozas)
+) WITH CLUSTERING ORDER BY (foglalkozas ASC)
+    AND additional_write_policy = '99PERCENTILE'
+    AND bloom_filter_fp_chance = 0.01
+    AND caching = {'keys': 'ALL', 'rows_per_partition': 'NONE'}
+    AND comment = ''
+    AND compaction = {'class': 'org.apache.cassandra.db.compaction.UnifiedCompactionStrategy'}
+    AND compression = {'chunk_length_in_kb': '64', 'class': 'org.apache.cassandra.io.compress.LZ4Compressor'}
+    AND crc_check_chance = 1.0
+    AND default_time_to_live = 0
+    AND gc_grace_seconds = 864000
+    AND max_index_interval = 2048
+    AND memtable_flush_period_in_ms = 0
+    AND min_index_interval = 128
+    AND read_repair = 'BLOCKING'
+    AND speculative_retry = '99PERCENTILE';
+
+token@cqlsh:Movies> INSERT szemely (nev, szulev, foglalkozas) VALUES ('Kiss Bela', 2000, 'lakatos');
+SyntaxException: line 1:7 mismatched input 'szemely' expecting K_INTO (INSERT [szemely]...)
+token@cqlsh:Movies> INSERT into szemely (nev, szulev, foglalkozas) VALUES ('Kiss Bela', 2000, 'lakatos');
+token@cqlsh:Movies> INSERT into szemely (nev, szulev, foglalkozas) VALUES ('Kiss Ottó', 1999, 'pincer');
+token@cqlsh:Movies> SELECT * FROM szemely;
+
+ nev       | szulev | foglalkozas
+-----------+--------+-------------
+ Kiss Ottó |   1999 |      pincer
+ Kiss Bela |   2000 |     lakatos
+
+(2 rows)
+token@cqlsh:Movies> ALTER TABLE szemely
+          ... ADD vegzettseg LIST<TEXT>;
+token@cqlsh:Movies> UPDATE szemely
+          ... SET vegzettseg = ['gepesz', 'meszeresz']
+          ... WHERE nev = 'Kiss Bela' AND szulev = 2000 AND foglalkozas = 'pincer';
+token@cqlsh:Movies> select * from szemely;
+
+ nev       | szulev | foglalkozas | vegzettseg
+-----------+--------+-------------+-------------------------
+ Kiss Ottó |   1999 |      pincer |                    null
+ Kiss Bela |   2000 |     lakatos |                    null
+ Kiss Bela |   2000 |      pincer | ['gepesz', 'meszeresz']
+
+(3 rows)
+token@cqlsh:Movies> UPDATE szemely SET vegzettseg = ['gepesz', 'muszeresz'] WHERE nev = 'Kiss Bela' AND szulev = 2000 AND foglalkozas = 'lakatos';
+token@cqlsh:Movies> select * from szemely;
+
+ nev       | szulev | foglalkozas | vegzettseg
+-----------+--------+-------------+-------------------------
+ Kiss Ottó |   1999 |      pincer |                    null
+ Kiss Bela |   2000 |     lakatos | ['gepesz', 'muszeresz']
+ Kiss Bela |   2000 |      pincer | ['gepesz', 'meszeresz']
+
+(3 rows)
+token@cqlsh:Movies> UPDATE szemely SET vegzettseg = ['felszolgalo'] WHERE nev = 'Kiss Bela' AND szulev = 2000 AND foglalkozas = 'pincer';
+token@cqlsh:Movies> select * from szemely;
+
+ nev       | szulev | foglalkozas | vegzettseg
+-----------+--------+-------------+-------------------------
+ Kiss Ottó |   1999 |      pincer |                    null
+ Kiss Bela |   2000 |     lakatos | ['gepesz', 'muszeresz']
+ Kiss Bela |   2000 |      pincer |         ['felszolgalo']
+
+(3 rows)
+token@cqlsh:Movies> UPDATE szemely SET nev = "Nagy Bela"  WHERE  szulev = 2000 AND foglalkozas = 'pincer' AND vegzettseg = ['felszolgalo'];
+SyntaxException: line 1:38 no viable alternative at input 'WHERE' (UPDATE szemely SET nev = ["Nagy Bel]a"  WHERE...)
+token@cqlsh:Movies> UPDATE szemely SET nev = "Nagy Bela"  WHERE  szulev = 2000 AND foglalkozas = 'pincer' AND vegzettseg = ['felszolgalo'];
+SyntaxException: line 1:38 no viable alternative at input 'WHERE' (UPDATE szemely SET nev = ["Nagy Bel]a"  WHERE...)
+token@cqlsh:Movies> UPDATE szemely SET nev =["Nagy Bela"]  WHERE  szulev = 2000 AND foglalkozas = 'pincer' AND vegzettseg = ['felszolgalo'];
+SyntaxException: line 1:36 no viable alternative at input ']' (UPDATE szemely SET nev =[["Nagy Bel]a"]...)
+token@cqlsh:Movies> DELETE FROM szemely
+          ... ;
+SyntaxException: line 2:0 mismatched input ';' expecting K_WHERE
+token@cqlsh:Movies> DELETE FROM szemely WHERE nev = 'Kiss Bela' AND szulev = 2000 and foglalkozas = 'pincer'
+          ... ;
+token@cqlsh:Movies> select * from szemely;
+
+ nev       | szulev | foglalkozas | vegzettseg
+-----------+--------+-------------+-------------------------
+ Kiss Ottó |   1999 |      pincer |                    null
+ Kiss Bela |   2000 |     lakatos | ['gepesz', 'muszeresz']
+
+(2 rows)
+token@cqlsh:Movies> alter table szemely add nyelvtudas set<text>;
+token@cqlsh:Movies> update table szemely
+          ... set nyelvtudas = {'angol', 'francia'}
+          ... where nev = 'Kiss Ottó' AND szulev = 2000
+          ... and foglalkozas = 'pincer';
+SyntaxException: line 1:7 no viable alternative at input 'table' (update [table]...)
+token@cqlsh:Movies> update table szemely set nyelvtudas = {'angol', 'francia'} where nev = 'Kiss Ottó' AND szulev = 2000 and foglalkozas = 'pincer';
+SyntaxException: line 1:7 no viable alternative at input 'table' (update [table]...)
+token@cqlsh:Movies> update szemely set nyelvtudas = {'angol', 'francia'} where nev = 'Kiss Ottó' AND szulev = 2000 and foglalkozas = 'pincer';
+token@cqlsh:Movies> select * from szemely
+          ... ;
+
+ nev       | szulev | foglalkozas | nyelvtudas           | vegzettseg
+-----------+--------+-------------+----------------------+-------------------------
+ Kiss Ottó |   1999 |      pincer |                 null |                    null
+ Kiss Bela |   2000 |     lakatos |                 null | ['gepesz', 'muszeresz']
+ Kiss Ottó |   2000 |      pincer | {'angol', 'francia'} |                    null
+
+(3 rows)
+token@cqlsh:Movies> delete from szemely where  nyelvtudas = {'angol', 'francia'} where nev = 'Kiss Ottó' AND szulev = 1999 and foglalkozas = 'pincer';
+SyntaxException: line 1:61 mismatched input 'where' expecting EOF (... = {'angol', 'francia'} [where] nev...)
+token@cqlsh:Movies> delete from szemely where nev = 'Kiss Ottó' AND szulev = 2000 and foglalkozas = 'pincer';
+token@cqlsh:Movies> select * from szemely
+          ... ;
+
+ nev       | szulev | foglalkozas | nyelvtudas | vegzettseg
+-----------+--------+-------------+------------+-------------------------
+ Kiss Ottó |   1999 |      pincer |       null |                    null
+ Kiss Bela |   2000 |     lakatos |       null | ['gepesz', 'muszeresz']
+
+(2 rows)
+token@cqlsh:Movies> update szemely set nyelvtudas = {'angol', 'francia'} where nev = 'Kiss Ottó' AND szulev = 1999 and foglalkozas = 'pincer';
+token@cqlsh:Movies> select * from szemely ;
+
+ nev       | szulev | foglalkozas | nyelvtudas           | vegzettseg
+-----------+--------+-------------+----------------------+-------------------------
+ Kiss Ottó |   1999 |      pincer | {'angol', 'francia'} |                    null
+ Kiss Bela |   2000 |     lakatos |                 null | ['gepesz', 'muszeresz']
+
+(2 rows)
+token@cqlsh:Movies> alter table szemely
+          ... add autok map<text, text>;
+token@cqlsh:Movies> update szemely
+          ... set autok['AUDI'] = 'abc-123'
+          ... where nev = 'Kiss Bela' and szulev = 2000 and foglalkozas = 'lakatos';
+token@cqlsh:Movies> select * from szemely ;
+
+ nev       | szulev | foglalkozas | autok               | nyelvtudas           | vegzettseg
+-----------+--------+-------------+---------------------+----------------------+-------------------------
+ Kiss Ottó |   1999 |      pincer |                null | {'angol', 'francia'} |                    null
+ Kiss Bela |   2000 |     lakatos | {'AUDI': 'abc-123'} |                 null | ['gepesz', 'muszeresz']
+
+(2 rows)
+token@cqlsh:Movies> 
+token@cqlsh:Movies> 
